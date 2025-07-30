@@ -1,41 +1,78 @@
 pipeline {
-    agent any // Specifies where the pipeline will run. 'any' means on any available agent.
+    agent {
+        node {
+            label 'maven'
+        }
+    }
+environment {
+    PATH = "/opt/apache-maven-3.9.6/bin:$PATH"
 
-    stages {
-        stage('Build') {
+}
+   stages {
+        stage("build"){
             steps {
-                echo 'Building the application...'
-                // Add your build commands here, e.g.,
-                // sh 'mvn clean install'
+                 echo "----------- build started ----------"
+                sh 'mvn clean deploy -Dmaven.test.skip=true'
+                 echo "----------- build complted ----------"
             }
         }
-
-        stage('Test') {
-            steps {
-                echo 'Running tests...'
-                // Add your test commands here, e.g.,
-                // sh 'mvn test'
+        stage("test"){
+            steps{
+                echo "----------- unit test started ----------"
+                sh 'mvn surefire-report:report'
+                 echo "----------- unit test Complted ----------"
             }
         }
-
-        stage('Deploy') {
-            steps {
-                echo 'Deploying the application...'
-                // Add your deployment commands here, e.g.,
-                // sh 'scp target/myapp.jar user@server:/path/to/deploy'
+        stage("Jar Publish") {
+        steps {
+            script {
+                    echo '<--------------- Jar Publish Started --------------->'
+                     def server = Artifactory.newServer url:registry+"/artifactory" ,  credentialsId:"jfrog-cred"
+                     def properties = "buildid=${env.BUILD_ID},commitid=${GIT_COMMIT}";
+                     def uploadSpec = """{
+                          "files": [
+                            {
+                              "pattern": "jarstaging/(*)",
+                              "target": "valaxy-libs-release-local/{1}",
+                              "flat": "false",
+                              "props" : "${properties}",
+                              "exclusions": [ "*.sha1", "*.md5"]
+                            }
+                         ]
+                     }"""
+                     def buildInfo = server.upload(uploadSpec)
+                     buildInfo.env.collect()
+                     server.publishBuildInfo(buildInfo)
+                     echo '<--------------- Jar Publish Ended --------------->'  
+             }
+        }   
+    }
+    stage(" Docker Build ") {
+      steps {
+        script {
+           echo '<--------------- Docker Build Started --------------->'
+           app = docker.build(imageName+":"+version)
+           echo '<--------------- Docker Build Ends --------------->'
+        }
+      }
+    }
+    stage (" Docker Publish "){
+        steps {
+            script {
+               echo '<--------------- Docker Publish Started --------------->'  
+                docker.withRegistry(registry, 'jfrog-cred'){
+                    app.push()
+                }    
+               echo '<--------------- Docker Publish Ended --------------->'  
             }
         }
     }
-
-    post {
-        always {
-            echo 'Pipeline finished.'
-        }
-        success {
-            echo 'Pipeline succeeded!'
-        }
-        failure {
-            echo 'Pipeline failed, please check logs.'
-        }
-    }
+    stage(" Deploy ") {
+       steps {
+         script {
+            sh './deploy.sh'
+         }
+       }
+     }
+}
 }
