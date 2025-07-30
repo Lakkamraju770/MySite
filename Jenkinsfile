@@ -1,41 +1,59 @@
 pipeline {
-    agent any // Specifies where the pipeline will run. 'any' means on any available agent.
+    agent any
+
+    environment {
+        // Define reusable environment variables
+        BUILD_DIR = 'target'
+        ARTIFACT = 'myapp.jar'
+    }
 
     stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code...'
+                // Checkout from Git (customize your repo URL)
+                git branch: 'main', url: 'https://github.com/your-org/your-repo.git'
+            }
+        }
+
         stage('Build') {
             steps {
                 echo 'Building the application...'
-                // Add your build commands here, e.g.,
-                // sh 'mvn clean install'
+                // Use Maven to build (example)
+                sh 'mvn clean install -DskipTests'
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running tests...'
-                // Add your test commands here, e.g.,
-                // sh 'mvn test'
+                echo 'Running unit tests...'
+                sh 'mvn test'
+            }
+        }
+
+        stage('Code Quality Check') {
+            steps {
+                echo 'Running static code analysis...'
+                // Example: SonarQube or custom scripts
+                // sh 'mvn sonar:sonar'
+            }
+        }
+
+        stage('Package') {
+            steps {
+                echo 'Packaging the application...'
+                // Optional if already packaged during build
+                sh 'mvn package'
+            }
+        }
+
+        stage('Archive Artifact') {
+            steps {
+                echo 'Archiving the built artifact...'
+                archiveArtifacts artifacts: "${BUILD_DIR}/${ARTIFACT}", fingerprint: true
             }
         }
 
         stage('Deploy') {
             steps {
-                echo 'Deploying the application...'
-                // Add your deployment commands here, e.g.,
-                // sh 'scp target/myapp.jar user@server:/path/to/deploy'
-            }
-        }
-    }
-
-    post {
-        always {
-            echo 'Pipeline finished.'
-        }
-        success {
-            echo 'Pipeline succeeded!'
-        }
-        failure {
-            echo 'Pipeline failed, please check logs.'
-        }
-    }
-}
+                echo 'Deploying
